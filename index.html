@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Тести</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f9f9f9; padding: 20px; }
+    .test { background: white; padding: 15px; margin-bottom: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    .question { font-weight: bold; }
+    .options button { display: block; margin: 5px 0; padding: 10px; width: 100%; text-align: left; border-radius: 5px; border: 1px solid #ccc; cursor: pointer; }
+    .options button.correct { background-color: #c8f7c5; }
+    .options button.incorrect { background-color: #f7c5c5; }
+    .explanation { margin-top: 10px; color: #333; }
+  </style>
+</head>
+<body>
+  <h1>Проходження тестів</h1>
+  <div id="test-container">Завантаження тестів...</div>
+
+  <script>
+    const OPENROUTER_API_KEY = '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'; // 🔁 ВСТАВ СВІЙ КЛЮЧ
+
+    function createTestElement(test, index) {
+      const div = document.createElement('div');
+      div.className = 'test';
+
+      const question = document.createElement('div');
+      question.className = 'question';
+      question.innerText = `${index + 1}. ${test.question}`;
+      div.appendChild(question);
+
+      const optionsDiv = document.createElement('div');
+      optionsDiv.className = 'options';
+      test.options.forEach(opt => {
+        const button = document.createElement('button');
+        button.innerText = opt;
+        button.onclick = () => {
+          const correct = opt === test.correct;
+          button.classList.add(correct ? 'correct' : 'incorrect');
+          [...optionsDiv.children].forEach(btn => {
+            if (btn.innerText === test.correct) btn.classList.add('correct');
+            btn.disabled = true;
+          });
+        };
+        optionsDiv.appendChild(button);
+      });
+      div.appendChild(optionsDiv);
+
+      const explainBtn = document.createElement('button');
+      explainBtn.innerText = 'Пояснення';
+      explainBtn.onclick = () => handleExplanationClick(test.question, test.correct, explanationDiv);
+      div.appendChild(explainBtn);
+
+      const explanationDiv = document.createElement('div');
+      explanationDiv.className = 'explanation';
+      div.appendChild(explanationDiv);
+
+      return div;
+    }
+
+    async function generateExplanation(prompt) {
+      try {
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${OPENROUTER_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: "deepseek/deepseek-v3-base:free",
+            messages: [
+              { role: "system", content: "Ти медичний експерт. Поясни, чому правильна відповідь правильна.Також поясни чому не підходять неправильні відповіді. Це все коротко." },
+              { role: "user", content: prompt }
+            ],
+            temperature: 0.7
+          })
+        });
+
+        const data = await response.json();
+        return data.choices?.[0]?.message?.content?.trim() || "Не вдалося згенерувати пояснення.";
+      } catch (error) {
+        console.error("Помилка генерації пояснення:", error);
+        return "Сталася помилка при генерації пояснення.";
+      }
+    }
+
+    async function handleExplanationClick(question, correctAnswer, explanationElement) {
+      explanationElement.innerText = "Генерується пояснення...";
+      const prompt = `Питання: ${question}\nПравильна відповідь: ${correctAnswer}\nПоясни чому це правильна відповідь.`;
+      const explanation = await generateExplanation(prompt);
+      explanationElement.innerText = "Пояснення: " + explanation;
+    }
+
+    async function loadTests() {
+      try {
+        const response = await fetch('tests_output.json');
+        const tests = await response.json();
+
+        const container = document.getElementById('test-container');
+        container.innerHTML = '';
+
+        tests.forEach((test, i) => {
+          const el = createTestElement(test, i);
+          container.appendChild(el);
+        });
+      } catch (error) {
+        document.getElementById('test-container').innerText = 'Не вдалося завантажити тести.';
+        console.error('Помилка завантаження тестів:', error);
+      }
+    }
+
+    window.onload = loadTests;
+  </script>
+</body>
+</html>
